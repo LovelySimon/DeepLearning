@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision import transforms
 
-batch_size = 64
+batch_size = 32
 transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (
     0.3081,))])
 
@@ -20,9 +20,9 @@ class CNNModule(torch.nn.Module):
     def __init__(self):
         super(CNNModule, self).__init__()
         self.conv1 = torch.nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = torch.nn.Conv2d(10, 20, kernel_size=5)
+        self.conv2 = torch.nn.Conv2d(10, 20, kernel_size=3)
         self.pooling = torch.nn.MaxPool2d(2)
-        self.fc = torch.nn.Linear(320, 10)
+        self.fc = torch.nn.Linear(500, 10)
 
     def forward(self, x):
         batch_size = x.size(0)
