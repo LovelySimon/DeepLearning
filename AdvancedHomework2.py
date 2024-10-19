@@ -22,7 +22,7 @@ class ExamDataSet(Dataset):
 
 
 dataset = ExamDataSet()
-train_loader = DataLoader(dataset=dataset,batch_size= 16)
+train_loader = DataLoader(dataset=dataset, batch_size=16)
 
 
 class EModule(torch.nn.Module):
