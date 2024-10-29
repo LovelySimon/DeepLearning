@@ -35,7 +35,7 @@ class MnistNet(torch.nn.Module):
         return self.l5(x)
 
 
-model = MnistNet()
+model= MnistNet()
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
 
