@@ -21,8 +21,26 @@ class IrisDataSet(Dataset):
         return self.len
 
 
+class testDataset(Dataset):
+    def __init__(self):
+        test_set_x = np.loadtxt('./Iris/test/x.txt', dtype=np.float32)
+        test_set_y = np.loadtxt('./Iris/test/y.txt', dtype=np.float32)
+        self.len = test_set_x.shape[0]
+        self.x_data = torch.from_numpy(test_set_x)
+        test_set_y = test_set_y.reshape(30, 1)
+        self.y_data = torch.argmax(torch.from_numpy(test_set_y), dim=1)
+
+    def __getitem__(self, index):
+        return self.x_data[index], self.y_data[index]
+
+    def __len__(self):
+        return self.len
+
+
 dataset = IrisDataSet()
+test=testDataset()
 train_loader = DataLoader(dataset=dataset, batch_size=16)
+test_loader = DataLoader(dataset=test, batch_size=16)
 
 
 class IrisModule(torch.nn.Module):
@@ -75,7 +93,7 @@ class BFGSOptimizer:
 
         if ys.item() > 1e-10:  # 避免数值不稳定
             self.hessian_inv += (1 / ys.item()) * (torch.matmul(s, s.t()) / ss.item()) - (
-                        torch.matmul(self.hessian_inv @ y, y.t() @ self.hessian_inv) / ys.item())
+                    torch.matmul(self.hessian_inv @ y, y.t() @ self.hessian_inv) / ys.item())
 
         # 计算搜索方向
         search_direction = -self.hessian_inv @ current_grad.view(-1, 1)
@@ -149,10 +167,50 @@ def trainwithBFGS(epoch):
             optimizer_bfgs.step(closure)
 
 
+def test_SGD():
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data in test_loader:
+            inputs, target = data
+            outputs = model_sgd(inputs)
+            _, predicted = torch.max(outputs.data, dim=1)
+            total += target.size(0)
+            correct += (predicted == target).sum().item()
+    print('Accuracy_SGD : %d %% [%d/%d]' % (100 * correct / total, correct, total))
+
+def test_BFGS():
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data in test_loader:
+            inputs, target = data
+            outputs = model_bfgs(inputs)
+            _, predicted = torch.max(outputs.data, dim=1)
+            total += target.size(0)
+            correct += (predicted == target).sum().item()
+    print('Accuracy_BFGS : %d %% [%d/%d]' % (100 * correct / total, correct, total))
+
+def test_LBFGS():
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data in test_loader:
+            inputs, target = data
+            outputs = model_lbfgs(inputs)
+            _, predicted = torch.max(outputs.data, dim=1)
+            total += target.size(0)
+            correct += (predicted == target).sum().item()
+    print('Accuracy_LBFGS : %d %% [%d/%d]' % (100 * correct / total, correct, total))
+
+
 if __name__ == '__main__':
     trainWithSGD(10)
     trainWithLBFGS(10)
     trainwithBFGS(10)
+    test_SGD()
+    test_BFGS()
+    test_LBFGS()
     plt.figure(figsize=(10, 5))
     plt.plot(sgd_losses, label='SGD Loss', color='black')
     plt.plot(lbfgs_losses, label='LBFGS Loss', color='red')
