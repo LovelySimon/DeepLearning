@@ -11,7 +11,6 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 # 设置随机种子
-torch.manual_seed(42)
 data_dir = '/home/wh603/桌面/carsclassification/train'
 train_dataset = datasets.ImageFolder(root=data_dir, transform=transform)
 test_dataset = datasets.ImageFolder(root='/home/wh603/桌面/carsclassification/test', transform=transform)
@@ -92,6 +91,7 @@ def train(epoch):
 
 
 def test():
+    model.eval()
     correct = 0
     total = 0
     with torch.no_grad():
