@@ -5,9 +5,8 @@ from torch.hub import load_state_dict_from_url
 from torchvision import datasets, transforms
 from torch import nn
 from torch.utils.data import DataLoader
-
 transform = transforms.Compose([
-    transforms.Resize((448*448)),
+    transforms.Resize((448,448)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
@@ -16,8 +15,8 @@ data_dir = '/home/wh603/桌面/carsclassification/train'
 train_dataset = datasets.ImageFolder(root=data_dir, transform=transform)
 test_dataset = datasets.ImageFolder(root='/home/wh603/桌面/carsclassification/test', transform=transform)
 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, pin_memory=True)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, pin_memory=True)
+train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, pin_memory=True,num_workers=4)
+test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, pin_memory=True,num_workers=4)
 
 
 class BCNN(nn.Module):
@@ -38,7 +37,7 @@ class BCNN(nn.Module):
         features = features.view(features.size(0), 512, 14*14)
         features_T = torch.transpose(features, 1, 2)  # 将第二维度和第三维度进行交换
         features = torch.bmm(features, features_T) / (14*14)
-        features = features.view(features.size(0),512*512)
+        features = features.view(features.size(0), -1)
         return self.fc(features)
 
 model=BCNN(num_classes=6)
@@ -46,10 +45,11 @@ device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model.to(device)
 criterion=nn.CrossEntropyLoss()
 optimizer=torch.optim.SGD(model.fc.parameters(),lr=0.01,momentum=0.9)
-losses=[]
+losses = torch.tensor([]).to(device)
 
 def train(epoch):
-    running_loss=0.0
+    running_loss = 0.0
+    global losses
     for batch_idx, data in enumerate(train_loader,0):
         inputs, labels=data
         inputs, labels=inputs.to(device), labels.to(device)
@@ -60,8 +60,9 @@ def train(epoch):
         optimizer.step()
         running_loss += loss.item()
     epoch_loss = running_loss / len(train_loader)
-    losses.append(epoch_loss)
-    print(f'Epoch {epoch + 1}, Loss: {epoch_loss:.4f}')
+    losses = torch.cat((losses, torch.tensor([epoch_loss]).to(device)))  # 将新计算的损失添加到 Tensor
+
+
 
 def test():
     model.eval()
@@ -80,3 +81,9 @@ if __name__ == '__main__':
     for epoch in range(10):
         train(epoch)
         test()
+    plt.plot(losses.cpu().numpy(), label='Training Loss')  # 需要将损失从 GPU 转回到 CPU
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Curve')
+    plt.legend()
+    plt.show()
