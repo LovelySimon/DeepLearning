@@ -45,7 +45,7 @@ device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model.to(device)
 criterion=nn.CrossEntropyLoss()
 optimizer=torch.optim.SGD(model.fc.parameters(),lr=0.01,momentum=0.9)
-losses = torch.tensor([]).to(device)
+
 
 def train(epoch):
     running_loss = 0.0
