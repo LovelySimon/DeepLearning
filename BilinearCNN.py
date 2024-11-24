@@ -53,16 +53,9 @@ class BilinearModel(nn.Module):
         feature_resnet50 = self.resnet50_reduce(feature_resnet50)
         feature_resnet34 = feature_resnet34.view(feature_resnet34.size(0), 512, 14 * 14)
         feature_resnet50 = feature_resnet50.view(feature_resnet50.size(0), 512, 14 * 14)
-
-        # Transpose feature_resnet50 to align dimensions for batch matrix multiplication
         feature_resnet50_T = feature_resnet50.transpose(1, 2)  # [B, H*W, 512]
-
-        # Perform bilinear pooling
         bilinear_features = torch.bmm(feature_resnet34, feature_resnet50_T) / (14 * 14)  # [B, 512, 512]
-
-        # Flatten the bilinear features to a 1D vector
         bilinear_features = bilinear_features.view(feature_resnet34.size(0), -1)  # [B, 512*512]
-        # Pass through the fully connected layer
         out = self.fc(bilinear_features)
         return out
 
