@@ -45,7 +45,6 @@ class BilinearModel(nn.Module):
             param.requires_grad = False
         for param in self.resnet50.parameters():
             param.requires_grad = False
-
     def forward(self, x):
         # Extract features from both ResNet models
         feature_resnet34 = self.resnet34(x)
