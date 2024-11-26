@@ -172,12 +172,6 @@ def test(num_classes):
     for i in range(num_classes):
         writer.add_scalar(f'Class {i} Accuracy', class_accuracy[i])
 
-    # 将特征矩阵保存到 TensorBoard
-    for i in range(len(feature_matrix)):
-        writer.add_embedding(feature_matrix[i].reshape(1, -1), metadata=[str(labels_list[i])], global_step=i,
-                             tag="Test Feature Matrix")
-
-
 if __name__ == '__main__':
     for epoch in range(10):
         train(epoch)
