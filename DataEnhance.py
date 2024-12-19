@@ -19,8 +19,8 @@ transform3 = transforms.Compose([
 transform4 = transforms.Compose([
     transforms.RandomResizedCrop(128, scale=(0.8, 1.0)),
 ])
-data_dir = '/home/wh603/桌面/carsclassification/train'  # 原始图像数据集路径
-save_dir = '/home/wh603/桌面/carsclassification/train'  # 增强图像保存的根目录，通常可以和原始路径相同
+data_dir = 'C://Users//Administrator//Desktop//tobacco//val'  # 原始图像数据集路径
+save_dir = 'C://Users//Administrator//Desktop//tobacco//val'  # 增强图像保存的根目录，通常可以和原始路径相同
 dataset = ImageFolder(root=data_dir)
 for i, (img, label) in enumerate(dataset):
     original_path = dataset.imgs[i][0]

@@ -6,68 +6,103 @@ from torchvision.models import ResNet50_Weights
 from torchvision.models import ResNet34_Weights
 from torchvision import datasets, transforms
 from torch.optim import SGD
+import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import ssl
+from torch.optim.lr_scheduler import StepLR
 ssl._create_default_https_context = ssl._create_unverified_context
 writer = SummaryWriter(log_dir="logs")
+# --------------------------------------------------------------------------
+# 对输入图片进行预处理和归一化
+# --------------------------------------------------------------------------
 transform = transforms.Compose([
     transforms.Resize((448, 448)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
-
-train_data_dir = 'D:/datacars/train'
-val_data_dir = 'D:/datacars/val'
-test_data_dir = 'D:/datacars/test'
+# ---------------------------------------------------------------------------
+# 读入图片设置datasets
+# ---------------------------------------------------------------------------
+train_data_dir = 'C://Users//Administrator//Desktop//TOBACCO20241211//train'
+val_data_dir = 'C://Users//Administrator//Desktop//TOBACCO20241211//val'
+test_data_dir = 'C://Users//Administrator//Desktop//tobacco//test'
 train_dataset = datasets.ImageFolder(root=train_data_dir, transform=transform)
 val_dataset = datasets.ImageFolder(root=val_data_dir, transform=transform)
 test_dataset = datasets.ImageFolder(root=test_data_dir, transform=transform)
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, pin_memory=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, pin_memory=True, num_workers=4)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, pin_memory=True, num_workers=4)
-
-
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, pin_memory=True, num_workers=4)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, pin_memory=True, num_workers=4)
+# -----------------------------------------
+# 网络设计，使用预训练的resnet34和resnet50
+# -----------------------------------------
 class BilinearModel(nn.Module):
     def __init__(self, num_classes, pretrained=True):
         super(BilinearModel, self).__init__()
         self.resnet34 = torchvision.models.resnet34(weights=ResNet34_Weights.DEFAULT)
         self.resnet50 = torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)
-        # Remove the fully connected layers (classification layers)
-        self.resnet34 = nn.Sequential(*list(self.resnet34.children())[:-2])  # Remove the classifier
-        self.resnet50 = nn.Sequential(*list(self.resnet50.children())[:-2])  # Remove the classifier
+        # 去除全连接层和分类层 (classification layers)
+        self.resnet34 = nn.Sequential(*list(self.resnet34.children())[:-2])
+        self.resnet50 = nn.Sequential(*list(self.resnet50.children())[:-2])
         self.resnet50_reduce = torch.nn.Conv2d(2048, 512, kernel_size=1, stride=1, padding=0)
-        # Define the final classifier
-        self.fc = nn.Linear(512 * 512, num_classes)  # 512*512 after bilinear pooling (simplified)
-        nn.init.kaiming_normal_(self.fc.weight.data)
-        nn.init.constant_(self.fc.bias, val=0)
-        # Freeze the layers of ResNet models if needed
+        # 降维操作
+        self.conv1 = nn.Conv2d(512, 256, kernel_size=3, stride=1)
+        self.conv2 = nn.Conv2d(256, 128, kernel_size=3, stride=1)
+        self.fc1 = nn.Linear(128*128, 128)
+        self.fc2 = nn.Linear(128, num_classes)
+        # self._init_weights()
+        # 冻结resnet网络的参数
         for param in self.resnet34.parameters():
             param.requires_grad = False
         for param in self.resnet50.parameters():
             param.requires_grad = False
+
+    # def _init_weights(self):
+    #     # 使用 Kaiming 初始化权重，偏置初始化为零
+    #     nn.init.kaiming_normal_(self.fc1.weight.data)
+    #     nn.init.constant_(self.fc1.bias, 0)
+
+    #     nn.init.kaiming_normal_(self.fc2.weight.data)
+    #     nn.init.constant_(self.fc2.bias, 0)
+
     def forward(self, x):
         # Extract features from both ResNet models
         feature_resnet34 = self.resnet34(x)
         feature_resnet50 = self.resnet50(x)
-        feature_resnet50 = self.resnet50_reduce(feature_resnet50)
-        feature_resnet34 = feature_resnet34.view(feature_resnet34.size(0), 512, 14 * 14)
-        feature_resnet50 = feature_resnet50.view(feature_resnet50.size(0), 512, 14 * 14)
+        feature_resnet50 = self.resnet50_reduce(feature_resnet50)  #[B,512,14,14]
+        feature_resnet34 = self.conv1(feature_resnet34)
+        feature_resnet34 = self.conv2(feature_resnet34)
+        feature_resnet50 = self.conv1(feature_resnet50)
+        feature_resnet50 = self.conv2(feature_resnet50)
+        feature_resnet34 = feature_resnet34.view(feature_resnet34.size(0), 128, 10*10)
+        feature_resnet50 = feature_resnet50.view(feature_resnet50.size(0), 128, 10*10)
+        # Transpose feature_resnet50 to align dimensions for batch matrix multiplication
         feature_resnet50_T = feature_resnet50.transpose(1, 2)  # [B, H*W, 512]
-        bilinear_features = torch.bmm(feature_resnet34, feature_resnet50_T) / (14 * 14)  # [B, 512, 512]
+        # Perform bilinear pooling
+        bilinear_features = torch.bmm(feature_resnet34, feature_resnet50_T) / (10*10)  # [B, 512, 512]
+        # Flatten the bilinear features to a 1D vector
         bilinear_features = bilinear_features.view(feature_resnet34.size(0), -1)  # [B, 512*512]
-        out = self.fc(bilinear_features)
+        # Pass through the fully connected layer
+        bilinear_features = nn.functional.relu(self.fc1(bilinear_features))
+        out = self.fc2(bilinear_features)
         return out
 
 
 # Initialize model, criterion, and optimizer
-model = BilinearModel(num_classes=6)
+model = BilinearModel(num_classes=4)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
 criterion = nn.CrossEntropyLoss()
-optimizer = SGD(model.fc.parameters(), lr=0.01, momentum=0.9)
+optimizer = torch.optim.SGD(
+    [
+        {'params': model.fc1.parameters()},
+        {'params': model.fc2.parameters()},
+    ],
+    lr=0.001,
+    momentum=0.9
+)
+scheduler = StepLR(optimizer, step_size=20, gamma=0.5)
 best_val_loss = float('inf')
-
 def train(epoch):
     model.train()
     running_loss = 0.0
@@ -114,15 +149,17 @@ def validate(epoch):
         torch.save(model.state_dict(), 'best_model.pth')
         print(f"Model saved with validation loss: {best_val_loss:.4f}")
 
+
 def test(num_classes):
+    model.load_state_dict(torch.load('best_model.pth'))
+    # torch.save(model, 'BilinearCNN.pth')
+    total_params = sum(p.numel() for p in model.parameters())
+    print(total_params)
     model.eval()  # 设置为评估模式
     correct = 0
     total = 0
     class_correct = [0 for _ in range(num_classes)]
     class_total = [0 for _ in range(num_classes)]
-
-    feature_matrix = []  # 存储特征矩阵
-    labels_list = []  # 存储对应的标签
 
     with torch.no_grad():  # 禁用梯度计算
         for data in test_loader:
@@ -144,10 +181,6 @@ def test(num_classes):
                 if predicted[i] == label:
                     class_correct[label] += 1
 
-            # 提取并保存特征矩阵和对应标签
-            feature_matrix.append(outputs.cpu().numpy())
-            labels_list.append(labels.cpu().numpy())
-
     # 计算平均准确率
     overall_accuracy = 100 * correct / total
 
@@ -162,19 +195,11 @@ def test(num_classes):
     for i in range(num_classes):
         print(f"Class {i} Accuracy: {class_accuracy[i]:.2f}%")
 
-    # 将特征矩阵转为 numpy 数组并保存
-    feature_matrix = np.vstack(feature_matrix)
-    labels_list = np.concatenate(labels_list)
-    print(f"Feature Matrix Shape: {feature_matrix.shape}")
-
-    # 写入 TensorBoard
-    writer.add_scalar('Test Accuracy', overall_accuracy)
-    for i in range(num_classes):
-        writer.add_scalar(f'Class {i} Accuracy', class_accuracy[i])
 
 if __name__ == '__main__':
-    for epoch in range(10):
+    for epoch in range(100):
         train(epoch)
         validate(epoch)
-    test(num_classes=6)
+        scheduler.step()
+    # test(num_classes=4)
     writer.close()
