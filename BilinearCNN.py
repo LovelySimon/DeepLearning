@@ -23,8 +23,8 @@ transform = transforms.Compose([
 # ---------------------------------------------------------------------------
 # 读入图片设置datasets
 # ---------------------------------------------------------------------------
-train_data_dir = 'C://Users//Administrator//Desktop//TOBACCO20241211//train'
-val_data_dir = 'C://Users//Administrator//Desktop//TOBACCO20241211//val'
+train_data_dir = 'C://Users//Administrator//Desktop//datacars//train'
+val_data_dir = 'C://Users//Administrator//Desktop//datacars//val'
 test_data_dir = 'C://Users//Administrator//Desktop//tobacco//test'
 train_dataset = datasets.ImageFolder(root=train_data_dir, transform=transform)
 val_dataset = datasets.ImageFolder(root=val_data_dir, transform=transform)
